@@ -1,8 +1,13 @@
-import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:tach_panda_test/ui/use_audio_screen.dart';
 
 import 'constant/colors.dart';
+import 'package:audio_session/audio_session.dart';
+import 'package:flutter/services.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:rxdart/rxdart.dart';
+
+import 'just_logic.dart';
 
 class AudioScreen extends StatefulWidget {
   const AudioScreen({Key? key}) : super(key: key);
@@ -11,10 +16,10 @@ class AudioScreen extends StatefulWidget {
   State<AudioScreen> createState() => _AudioScreenState();
 }
 
-class _AudioScreenState extends State<AudioScreen> {
-  final progress = Duration(milliseconds: 100);
-  final buffered = Duration(milliseconds: 100);
-  final total = Duration(milliseconds: 100);
+class _AudioScreenState extends State<AudioScreen> with WidgetsBindingObserver {
+  final progress = const Duration(milliseconds: 100);
+  final buffered = const Duration(milliseconds: 100);
+  final total = const Duration(milliseconds: 100);
 
   List<String> myProducts = [
     "https://burst.shopifycdn.com/photos/city-lights-through-rain-window.jpg?width=1200&format=pjpg&exif=1&iptc=1",
@@ -30,6 +35,60 @@ class _AudioScreenState extends State<AudioScreen> {
     "https://burst.shopifycdn.com/photos/city-lights-through-rain-window.jpg?width=1200&format=pjpg&exif=1&iptc=1",
     "https://burst.shopifycdn.com/photos/city-lights-through-rain-window.jpg?width=1200&format=pjpg&exif=1&iptc=1",
   ];
+
+  final _player = AudioPlayer();
+
+  @override
+  void initState() {
+    super.initState();
+    ambiguate(WidgetsBinding.instance)!.addObserver(this);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.black,
+    ));
+    _init();
+  }
+
+  Future<void> _init() async {
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.speech());
+    _player.playbackEventStream.listen((event) {},
+        onError: (Object e, StackTrace stackTrace) {
+      print('A stream error occurred: $e');
+    });
+    try {
+      await _player.setAudioSource(
+        AudioSource.uri(
+          Uri.parse(
+              "https://s3.amazonaws.com/scifri-episodes/scifri20181123-episode.mp3"),
+        ),
+      );
+    } catch (e) {
+      print("Error loading audio source: $e");
+    }
+  }
+
+  @override
+  void dispose() {
+    ambiguate(WidgetsBinding.instance)!.removeObserver(this);
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _player.stop();
+    }
+  }
+
+  Stream<PositionData> get _positionDataStream =>
+      Rx.combineLatest3<Duration, Duration, Duration?, PositionData>(
+        _player.positionStream,
+        _player.bufferedPositionStream,
+        _player.durationStream,
+        (position, bufferedPosition, duration) =>
+            PositionData(position, bufferedPosition, duration ?? Duration.zero),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -145,37 +204,32 @@ class _AudioScreenState extends State<AudioScreen> {
                   ),
                   Row(
                     children: [
-                      const Icon(
-                        Icons.play_arrow,
-                        color: Colors.orange,
-                        size: 32,
-                      ),
-                      const SizedBox(width: 10.0),
-                      Expanded(
-                        child: ProgressBar(
-                          progress: progress,
-                          buffered: buffered,
-                          total: total,
-                          thumbCanPaintOutsideBar: true,
-                          progressBarColor: Colors.orange,
-                          // baseBarColor: Colors.white.withOpacity(0.24),
-                          // bufferedBarColor: Colors.white.withOpacity(0.24),
-                          thumbColor: Colors.white,
-                          barHeight: 3.0,
-                          thumbRadius: 7.0,
-                          timeLabelLocation: TimeLabelLocation.none,
-
-                          onSeek: (duration) {},
+                      ControlButtons(_player),
+                      Container(
+                        width: w * 0.73,
+                        child: StreamBuilder<PositionData>(
+                          stream: _positionDataStream,
+                          builder: (context, snapshot) {
+                            final positionData = snapshot.data;
+                            return SeekBar(
+                              duration: positionData?.duration ?? Duration.zero,
+                              position: positionData?.position ?? Duration.zero,
+                              bufferedPosition:
+                                  positionData?.bufferedPosition ??
+                                      Duration.zero,
+                              onChangeEnd: _player.seek,
+                            );
+                          },
                         ),
                       ),
                       const SizedBox(width: 10.0),
-                      const Text(
-                        "2:36",
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w400),
-                      ),
+                      // const Text(
+                      //   "2:36",
+                      //   style: TextStyle(
+                      //       color: Colors.white,
+                      //       fontSize: 15,
+                      //       fontWeight: FontWeight.w400),
+                      // ),
                     ],
                   ),
                   const SizedBox(
@@ -253,10 +307,60 @@ class _AudioScreenState extends State<AudioScreen> {
   }
 }
 
-class DurationState {
-  const DurationState(
-      {required this.progress, required this.buffered, required this.total});
-  final Duration progress;
-  final Duration buffered;
-  final Duration total;
+class ControlButtons extends StatelessWidget {
+  final AudioPlayer player;
+
+  const ControlButtons(this.player, {Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<PlayerState>(
+      stream: player.playerStateStream,
+      builder: (context, snapshot) {
+        final playerState = snapshot.data;
+        final processingState = playerState?.processingState;
+        final playing = playerState?.playing;
+        if (processingState == ProcessingState.loading ||
+            processingState == ProcessingState.buffering) {
+          return Container(
+            margin: EdgeInsets.all(4.0),
+            width: 24.0,
+            height: 14.0,
+            child: const CircularProgressIndicator(
+              color: Colors.orange,
+            ),
+          );
+        } else if (playing != true) {
+          return InkWell(
+            onTap: player.play,
+            child: const Icon(
+              Icons.play_arrow,
+              size: 35,
+              color: Colors.orange,
+            ),
+          );
+        } else if (processingState != ProcessingState.completed) {
+          return InkWell(
+            onTap: player.pause,
+            child: const Icon(
+              Icons.pause,
+              size: 35,
+              color: Colors.orange,
+            ),
+          );
+        } else {
+          return InkWell(
+            onTap: () {
+              player.seek(Duration.zero);
+            },
+            child: const Icon(
+              Icons.replay,
+              size: 35,
+              color: Colors.orange,
+            ),
+          );
+        }
+      },
+    );
+  }
 }

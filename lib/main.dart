@@ -4,6 +4,7 @@ import 'package:tach_panda_test/ui/constant/colors.dart';
 import 'package:tach_panda_test/ui/home_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     SystemUiOverlayStyle(
         statusBarColor: AppColor.colorPrimary,

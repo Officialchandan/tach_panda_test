@@ -1,6 +1,7 @@
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:tach_panda_test/ui/text.dart';
 import 'package:tach_panda_test/ui/ui_bloc/bloc_event.dart';
 import 'package:tach_panda_test/ui/ui_bloc/bloc_state.dart';
 import 'package:tach_panda_test/ui/ui_bloc/ui_bloc.dart';
@@ -290,7 +291,7 @@ class _UseAudioScreenState extends State<UseAudioScreen> {
                           const SizedBox(
                             width: 10.0,
                           ),
-                          BlocBuilder(
+                          BlocConsumer(
                             builder: (context, state) {
                               if (state is SwitchState) {
                                 switchValue = state.isSwitch;
@@ -311,6 +312,14 @@ class _UseAudioScreenState extends State<UseAudioScreen> {
                                       uiBloc.add(SwitchEvent(isSwitch: value));
                                     },
                                   ),
+                                ),
+                              );
+                            },
+                            listener: (context, state) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const CameraPage(),
                                 ),
                               );
                             },
@@ -362,18 +371,21 @@ class _UseAudioScreenState extends State<UseAudioScreen> {
                           const SizedBox(
                             width: 30,
                           ),
-                          Container(
-                            height: 80,
-                            width: 80,
-                            // padding: const EdgeInsets.symmetric(
-                            //     horizontal: 9, vertical: 0),
-                            decoration: BoxDecoration(
-                                color: Colors.orange,
-                                border: Border.all(
-                                    color: Colors.white,
-                                    width: 4,
-                                    style: BorderStyle.solid),
-                                borderRadius: BorderRadius.circular(90.0)),
+                          InkWell(
+                            onTap: () {},
+                            child: Container(
+                              height: 80,
+                              width: 80,
+                              // padding: const EdgeInsets.symmetric(
+                              //     horizontal: 9, vertical: 0),
+                              decoration: BoxDecoration(
+                                  color: Colors.orange,
+                                  border: Border.all(
+                                      color: Colors.white,
+                                      width: 4,
+                                      style: BorderStyle.solid),
+                                  borderRadius: BorderRadius.circular(90.0)),
+                            ),
                           ),
                           const SizedBox(
                             width: 30,
